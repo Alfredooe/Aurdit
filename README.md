@@ -51,6 +51,45 @@ aurdit check --json | jq .
 
 Findings are labeled with [MITRE ATT&CK](https://attack.mitre.org/) technique IDs.
 
+Example output targetting known malicious commit from the June 2026 campaign:
+
+```json
+$ aurdit premake-git --commit 232b22dd --json | jq .
+{
+  "package": "premake-git",
+  "verdict": {
+    "verdict": "MALICIOUS",
+    "confidence": "HIGH",
+    "summary": "This PKGBUILD is malicious. The install= script contains
+      a post_install() that runs 'npm install atomic-lockfile' — a known
+      malicious package from the June 2026 supply chain attack wave.",
+    "findings": [
+      {
+        "severity": "CRITICAL",
+        "ttp": "T1195.002",
+        "line": 1,
+        "detail": "Install file contains post_install() running
+          'npm install atomic-lockfile' in /tmp."
+      },
+      {
+        "severity": "HIGH",
+        "ttp": "T1059.004",
+        "line": 10,
+        "detail": "'npm' in depends=() — premake is a C tool with no
+          legitimate need for Node.js at runtime."
+      },
+      {
+        "severity": "MEDIUM",
+        "ttp": "T1027",
+        "line": 12,
+        "detail": "Malicious payload hidden in .install file rather than the
+          PKGBUILD, avoiding casual review."
+      }
+    ]
+  }
+}
+```
+
 ## How it works
 
 Criteria are defined in `skills/` as Markdown files the LLM loads as reference:
