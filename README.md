@@ -14,7 +14,7 @@ cd aurdit
 make build
 ```
 
-Requires Go 1.24+ and `DEEPSEEK_API_KEY` in your environment.
+Requires Go 1.24+ and `DEEPSEEK_API_KEY` in your environment, This uses the official deepseek APIs. Ultimately it's just completions, Switch the provider as you need. I use this because it's cheap.
 
 ## Usage
 
