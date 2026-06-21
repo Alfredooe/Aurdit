@@ -74,7 +74,7 @@ func LoadConfig(paths ...string) Config {
 			continue
 		}
 		if cfg.Model == "" {
-			cfg.Model = "deepseek-chat"
+			cfg.Model = "deepseek-v4-pro"
 		}
 		if cfg.BaseURL == "" {
 			cfg.BaseURL = "https://api.deepseek.com/v1"
@@ -84,7 +84,7 @@ func LoadConfig(paths ...string) Config {
 		}
 	}
 	return Config{
-		Model:   "deepseek-chat",
+		Model:   "deepseek-v4-pro",
 		BaseURL: "https://api.deepseek.com/v1",
 	}
 }

@@ -30,5 +30,5 @@ instruction: |
   that merely confirm something is safe. If everything is clean, return an empty findings
   array and a single summary sentence.
 
-# model: deepseek-chat
+# model: deepseek-v4-pro
 # base_url: https://api.deepseek.com/v1
