@@ -19,6 +19,10 @@ import (
 	"github.com/go-git/go-git/v6/plumbing/object"
 )
 
+const aurBaseURL = "https://aur.archlinux.org"
+
+var errStop = fmt.Errorf("stop")
+
 // Version represents one version of a PKGBUILD from git history.
 type Version struct {
 	PKGBUILD string
@@ -31,11 +35,8 @@ type Version struct {
 
 // PackageInfo holds AUR package metadata from the RPC.
 type PackageInfo struct {
-	Name          string
-	Version       string
-	Maintainer    string
-	LastModified  int64
-	Description   string
+	Name    string
+	Version string
 }
 
 // rpcResult mirrors the AUR RPC v5 response.
@@ -47,18 +48,15 @@ type rpcResult struct {
 	Error       string          `json:"error"`
 }
 type rpcPackage struct {
-	Name         string `json:"Name"`
-	Version      string `json:"Version"`
-	Maintainer   string `json:"Maintainer"`
-	LastModified int64  `json:"LastModified"`
-	Description  string `json:"Description"`
+	Name    string `json:"Name"`
+	Version string `json:"Version"`
 }
 
 // Clone shallow-clones an AUR package repo to a temp directory.
 // Returns the repo, the directory path, and any error.
 func Clone(pkg string) (*git.Repository, string, error) {
 	dir := filepath.Join(os.TempDir(), "aurdit", pkg)
-	url := "https://aur.archlinux.org/" + pkg + ".git"
+	url := aurBaseURL + "/" + pkg + ".git"
 
 	// Remove any stale partial clone
 	os.RemoveAll(dir)
@@ -89,27 +87,36 @@ func Versions(repo *git.Repository, n int) ([]Version, error) {
 	count := 0
 	err = iter.ForEach(func(c *object.Commit) error {
 		if count >= n {
-			return fmt.Errorf("stop")
+			return errStop
 		}
-		pkgbuild, err := fileAtCommit(c, "PKGBUILD")
-		if err != nil {
+		v := versionFromCommit(c)
+		if v.PKGBUILD == "" {
 			return nil // skip commits without PKGBUILD
 		}
-		versions = append(versions, Version{
-			PKGBUILD: pkgbuild,
-			Install:  installAtCommit(c),
-			Hash:     c.Hash.String(),
-			Author:   c.Author.Name,
-			Date:     c.Author.When,
-			Message:  strings.TrimSpace(c.Message),
-		})
+		versions = append(versions, v)
 		count++
 		return nil
 	})
-	if err != nil && err.Error() != "stop" {
+	if err != nil && err != errStop {
 		return nil, fmt.Errorf("iterate commits: %w", err)
 	}
 	return versions, nil
+}
+
+func versionFromCommit(c *object.Commit) Version {
+	return Version{
+		PKGBUILD: fileAtCommitStr(c, "PKGBUILD"),
+		Install:  installAtCommit(c),
+		Hash:     c.Hash.String(),
+		Author:   c.Author.Name,
+		Date:     c.Author.When,
+		Message:  strings.TrimSpace(c.Message),
+	}
+}
+
+func fileAtCommitStr(c *object.Commit, path string) string {
+	s, _ := fileAtCommit(c, path)
+	return s
 }
 
 // VersionsAround returns the PKGBUILD at the specified commit plus N surrounding versions.
@@ -129,16 +136,7 @@ func VersionsAround(repo *git.Repository, dir, hash string, n int) ([]Version, e
 	if err != nil {
 		return nil, fmt.Errorf("commit %s not found: %w", hash, err)
 	}
-	pkgbuild, _ := fileAtCommit(commit, "PKGBUILD")
-
-	return []Version{{
-		PKGBUILD: pkgbuild,
-		Install:  installAtCommit(commit),
-		Hash:     commit.Hash.String(),
-		Author:   commit.Author.Name,
-		Date:     commit.Author.When,
-		Message:  strings.TrimSpace(commit.Message),
-	}}, nil
+	return []Version{versionFromCommit(commit)}, nil
 }
 
 func versionsAround(repo *git.Repository, hash string, n int) ([]Version, error) {
@@ -155,25 +153,18 @@ func versionsAround(repo *git.Repository, hash string, n int) ([]Version, error)
 	var all []Version
 	count := 0
 	err = iter.ForEach(func(c *object.Commit) error {
-		pkgbuild, err2 := fileAtCommit(c, "PKGBUILD")
-		if err2 != nil {
+		v := versionFromCommit(c)
+		if v.PKGBUILD == "" {
 			return nil
 		}
-		all = append(all, Version{
-			PKGBUILD: pkgbuild,
-			Install:  installAtCommit(c),
-			Hash:     c.Hash.String(),
-			Author:   c.Author.Name,
-			Date:     c.Author.When,
-			Message:  strings.TrimSpace(c.Message),
-		})
+		all = append(all, v)
 		if c.Hash.String() == hash || strings.HasPrefix(c.Hash.String(), hash) {
 			targetIdx = count
 		}
 		count++
 		return nil
 	})
-	if err != nil && err.Error() != "stop" {
+	if err != nil && err != errStop {
 		return nil, fmt.Errorf("iterate commits: %w", err)
 	}
 	if targetIdx < 0 {
@@ -193,31 +184,6 @@ func versionsAround(repo *git.Repository, hash string, n int) ([]Version, error)
 }
 
 // Diff returns the diff of PKGBUILD between two commits.
-func Diff(repo *git.Repository, oldHash, newHash string) (string, error) {
-	oldH := plumbing.NewHash(oldHash)
-	newH := plumbing.NewHash(newHash)
-	oldCommit, err := repo.CommitObject(oldH)
-	if err != nil {
-		return "", fmt.Errorf("old commit: %w", err)
-	}
-	newCommit, err := repo.CommitObject(newH)
-	if err != nil {
-		return "", fmt.Errorf("new commit: %w", err)
-	}
-	oldTree, err := oldCommit.Tree()
-	if err != nil {
-		return "", fmt.Errorf("old tree: %w", err)
-	}
-	newTree, err := newCommit.Tree()
-	if err != nil {
-		return "", fmt.Errorf("new tree: %w", err)
-	}
-	patch, err := oldTree.Patch(newTree)
-	if err != nil {
-		return "", fmt.Errorf("patch: %w", err)
-	}
-	return patch.String(), nil
-}
 
 // InstalledPackages returns the list of foreign (AUR) packages installed on the system.
 func InstalledPackages() ([]string, error) {
@@ -240,7 +206,7 @@ func AURInfo(pkgs []string) (map[string]PackageInfo, error) {
 	}
 
 	// Build URL with arg[] parameters
-	u, _ := url.Parse("https://aur.archlinux.org/rpc/v5/info")
+	u, _ := url.Parse(aurBaseURL + "/rpc/v5/info")
 	q := u.Query()
 	for _, p := range pkgs {
 		q.Add("arg[]", p)
@@ -264,13 +230,7 @@ func AURInfo(pkgs []string) (map[string]PackageInfo, error) {
 
 	result := make(map[string]PackageInfo, len(r.Results))
 	for _, p := range r.Results {
-		result[p.Name] = PackageInfo{
-			Name:         p.Name,
-			Version:      p.Version,
-			Maintainer:   p.Maintainer,
-			LastModified: p.LastModified,
-			Description:  p.Description,
-		}
+		result[p.Name] = PackageInfo{Name: p.Name, Version: p.Version}
 	}
 	return result, nil
 }
@@ -317,11 +277,9 @@ func Updates() ([]Update, error) {
 		}
 		if instVer != aur.Version {
 			updates = append(updates, Update{
-				Name:            pkg,
+				Name:             pkg,
 				InstalledVersion: instVer,
-				AURVersion:      aur.Version,
-				Maintainer:      aur.Maintainer,
-				Description:     aur.Description,
+				AURVersion:       aur.Version,
 			})
 		}
 	}
@@ -333,8 +291,6 @@ type Update struct {
 	Name             string
 	InstalledVersion string
 	AURVersion       string
-	Maintainer       string
-	Description      string
 }
 
 // fileAtCommit reads a file's content from a commit's tree.

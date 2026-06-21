@@ -137,24 +137,11 @@ func (a *Auditor) AuditCommit(ctx context.Context, pkg, commit string, n int) (*
 	return a.auditVersion(ctx, pkg, versions)
 }
 
-// AuditUpdates discovers AUR packages with updates and audits each one.
-func (a *Auditor) AuditUpdates(ctx context.Context) ([]*PackageResult, error) {
-	updates, err := aur.Updates()
-	if err != nil {
-		return nil, fmt.Errorf("check updates: %w", err)
-	}
-	if len(updates) == 0 {
-		return nil, nil
-	}
-	return a.AuditUpdateList(ctx, updates, nil), nil
-}
-
 // ListUpdates returns packages with pending AUR updates.
 func ListUpdates() ([]aur.Update, error) {
 	return aur.Updates()
 }
 
-// AuditUpdateList audits a list of updates with progress feedback.
 func (a *Auditor) AuditUpdateList(ctx context.Context, updates []aur.Update, progress func(string, string)) []*PackageResult {
 	var results []*PackageResult
 	for _, u := range updates {
@@ -294,10 +281,6 @@ func (a *Auditor) instruction() string {
 	if a.config.Instruction != "" {
 		return a.config.Instruction
 	}
-	return defaultInstruction()
-}
-
-func defaultInstruction() string {
 	return configs.DefaultInstruction
 }
 

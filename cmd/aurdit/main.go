@@ -80,9 +80,6 @@ func cmdAudit(pkg string) {
 
 	var result *audit.PackageResult
 	var err error
-	if history < 2 {
-		history = 2
-	}
 	if commit != "" {
 		result, err = a.AuditCommit(ctx, pkg, commit, history)
 	} else {
@@ -161,10 +158,6 @@ func cmdCheck() {
 
 	ctx := context.Background()
 	results := a.AuditUpdateList(ctx, updates, progress)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
 
 	if len(results) == 0 {
 		fmt.Println("No AUR packages with pending updates found.")
@@ -206,14 +199,14 @@ func cmdCheck() {
 		}
 		fmt.Println()
 		for _, f := range r.Verdict.Findings {
-			severity := colorSeverity(f.Severity)
+			severity := severityLabel(f.Severity)
 			fmt.Printf("  %s [%s] line %d: %s\n", severity, f.TTP, f.Line, f.Detail)
 		}
 	}
 }
 
 func printResult(r *audit.PackageResult) {
-	icon := verdictIcon(r.Verdict.Verdict)
+	icon := verdictLabel(r.Verdict.Verdict)
 	fmt.Printf("\n%s  %s — %s (confidence: %s)\n", icon, r.Package, r.Verdict.Verdict, r.Verdict.Confidence)
 	fmt.Println(strings.Repeat("─", 60))
 	fmt.Println(r.Verdict.Summary)
@@ -228,13 +221,13 @@ func printResult(r *audit.PackageResult) {
 		if f.Detail == "" && f.TTP == "" {
 			continue
 		}
-		severity := colorSeverity(f.Severity)
+		severity := severityLabel(f.Severity)
 		fmt.Printf("  %s [%s] line %d: %s\n", severity, f.TTP, f.Line, f.Detail)
 	}
 	fmt.Println()
 }
 
-func colorSeverity(s string) string {
+func severityLabel(s string) string {
 	switch s {
 	case "CRITICAL":
 		return "CRITICAL"
@@ -249,7 +242,7 @@ func colorSeverity(s string) string {
 	}
 }
 
-func verdictIcon(v string) string {
+func verdictLabel(v string) string {
 	switch v {
 	case "SAFE":
 		return "[SAFE]"

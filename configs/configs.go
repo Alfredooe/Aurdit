@@ -1,4 +1,4 @@
-// Package configs embeds build-time configuration for aurdit.
+// Package configs embeds aurdit.yaml as the single source of truth for defaults.
 package configs
 
 import (
@@ -8,7 +8,7 @@ import (
 )
 
 //go:embed aurdit.yaml
-var rawConfig []byte
+var raw []byte
 
 // DefaultInstruction is the embedded instruction from aurdit.yaml.
 var DefaultInstruction string
@@ -17,7 +17,7 @@ func init() {
 	var cfg struct {
 		Instruction string `yaml:"instruction"`
 	}
-	if err := yaml.Unmarshal(rawConfig, &cfg); err == nil && cfg.Instruction != "" {
+	if yaml.Unmarshal(raw, &cfg) == nil && cfg.Instruction != "" {
 		DefaultInstruction = cfg.Instruction
 	}
 }

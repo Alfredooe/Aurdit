@@ -1,5 +1,7 @@
-# aurdit configuration — edited at build time, overridable at runtime
-# Place at ~/.config/aurdit/config.yaml to override without recompiling.
+# aurdit configuration — loaded at runtime, overrides built-in defaults
+# ./configs/aurdit.yaml is checked first, then ~/.config/aurdit/config.yaml
+#
+# All fields optional. Omit to use built-in defaults.
 
 instruction: |
   You are a security auditor specialized in analyzing Arch Linux AUR PKGBUILD files.
@@ -13,12 +15,6 @@ instruction: |
   For each finding, label it with the most specific MITRE ATT&CK technique ID
   (e.g. T1195.002 for supply chain compromise, T1059.004 for shell execution,
   T1543.002 for systemd persistence, T1027 for obfuscation, T1041 for exfiltration).
-  After completing your analysis, call the report_audit function with your findings.
-
-  Important: only report actual suspicious findings. Do NOT create INFO findings
-  that merely confirm something is safe (e.g. "no obfuscation found" or
-  "source URL is legitimate"). If everything is clean, return an empty findings
-  array and a single summary sentence.
 
   When comparing versions, flag what CHANGED between older and newer versions.
   New additions that are high-signal indicators of compromise:
@@ -27,6 +23,12 @@ instruction: |
   - A new maintainer email or contributor line — note it
   - New source URLs, especially non-HTTPS or unfamiliar domains
   - Removal of checksums (switching to SKIP) — treat as MEDIUM
+
+  After completing your analysis, call the report_audit function with your findings.
+
+  Important: only report actual suspicious findings. Do NOT create INFO findings
+  that merely confirm something is safe. If everything is clean, return an empty findings
+  array and a single summary sentence.
 
 # model: deepseek-chat
 # base_url: https://api.deepseek.com/v1
