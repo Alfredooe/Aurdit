@@ -249,7 +249,7 @@ func (a *Auditor) auditVersion(ctx context.Context, pkg string, versions []aur.V
 
 	// If tool wasn't called (rare), try parsing from text
 	if capturedVerdict.Verdict == "" {
-		text := stripCodeFences(output.Text())
+		text := output.Text()
 		if err := json.Unmarshal([]byte(text), &capturedVerdict); err != nil {
 			return nil, fmt.Errorf("parse verdict: %w\nraw: %s", err, text)
 		}
@@ -284,22 +284,6 @@ func (a *Auditor) instruction() string {
 	return configs.DefaultInstruction
 }
 
-func stripCodeFences(text string) string {
-	text = strings.TrimSpace(text)
-	if strings.HasPrefix(text, "```") {
-		// Remove opening fence (```json or ```)
-		if idx := strings.Index(text, "\n"); idx != -1 {
-			text = text[idx+1:]
-		}
-		// Remove closing fence
-		if idx := strings.LastIndex(text, "```"); idx != -1 {
-			text = text[:idx]
-		}
-	}
-	return strings.TrimSpace(text)
-}
-
-// APIKey returns the DeepSeek API key from the environment.
 func APIKey() string {
 	return os.Getenv("DEEPSEEK_API_KEY")
 }
