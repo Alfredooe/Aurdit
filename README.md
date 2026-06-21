@@ -1,0 +1,118 @@
+# aurdit
+
+Audit AUR PKGBUILDs for malicious changes using LLM-powered analysis.
+
+Compares sequential PKGBUILD versions to detect anomalous changes, supply chain attacks, obfuscated code, persistence mechanisms, and credential theft using skills files of TTPs derived from recent supply chain attacks.
+
+This is somewhat experimental, Seems to have a decently high rate of detecting recent attacks, Not at all a replacement for reading changes yourself :)
+
+## Install
+
+```bash
+git clone https://github.com/Alfredooe/aurdit
+cd aurdit
+make build
+```
+
+Requires Go 1.24+ and `DEEPSEEK_API_KEY` in your environment.
+
+## Usage
+
+```bash
+# Audit a single package (compares last 5 versions by default)
+aurdit dodgypackagename
+
+# Compare last 10 versions
+aurdit dodgypackagename --history 10
+
+# Audit a specific commit
+aurdit premake-git --commit 232b22dd0aaedfa9fde1800710e0d52e4f4b542d
+
+# Stream LLM output as it runs
+aurdit dodgypackagename -v
+
+# Machine-readable JSON
+aurdit dodgypackagename --json | jq .
+
+# Check all installed AUR packages for pending updates and audit each
+aurdit check
+
+# Same, with JSON output
+aurdit check --json | jq .
+```
+
+## What it checks
+
+- Supply chain: source URL changes, maintainer changes, typosquatting, orphan hijacking
+- Obfuscation: base64, eval, curl|bash, hidden commands in .install files
+- Persistence: systemd services, shell config injection, cron jobs
+- Credential theft: SSH key access, token exfiltration, C2 endpoints
+- Dependency risks: npm/bun/pip in depends, new install hooks
+
+Findings are labeled with [MITRE ATT&CK](https://attack.mitre.org/) technique IDs.
+
+## How it works
+
+Criteria are defined in `skills/` as Markdown files the LLM loads as reference:
+
+- `supplychain-ttps/` — dependency confusion, typosquatting, commit forgery
+- `obfuscation-ttps/` — shell obfuscation, systemd persistence, eBPF rootkit
+- `pkgbuild-ttps/` — privilege escalation, credential theft, known IOCs
+
+Skills are compiled into the binary. Edit `configs/aurdit.yaml` to customize the
+audit persona without recompiling.
+
+## Config
+
+`configs/aurdit.yaml` is embedded at build time. Override at runtime with
+`~/.config/aurdit/config.yaml`:
+
+```yaml
+instruction: |
+  Custom audit persona here.
+model: deepseek-chat
+base_url: https://api.deepseek.com/v1
+```
+
+## Integration
+
+You can use a Paru PreBuildCommand hook to run this prior to makepkg, Seems to work decently.
+
+### paru PreBuildCommand hook
+
+paru's `PreBuildCommand` runs before `makepkg` — exit non-zero to abort the build.
+
+Create `~/.config/paru/prebuild-hook`:
+
+```bash
+#!/bin/sh
+output=$(aurdit "$PKGBASE" --json 2>/dev/null) || exit 0
+verdict=$(echo "$output" | jq -r '.verdict.verdict')
+case "$verdict" in
+    SAFE) exit 0 ;;
+    SUSPICIOUS|MALICIOUS)
+        echo "$output" | jq .
+        exit 1 ;;
+esac
+```
+
+```bash
+chmod +x ~/.config/paru/prebuild-hook
+```
+
+Then in `~/.config/paru/paru.conf`:
+
+```ini
+[bin]
+PreBuildCommand = ~/.config/paru/prebuild-hook
+```
+
+### Scripting
+
+```bash
+# Find suspicious AUR updates
+aurdit check --json | jq '.[] | select(.verdict.verdict != "SAFE")'
+
+# Block in CI
+aurdit <pkg> --json | jq -e '.verdict.verdict == "SAFE"' >/dev/null
+```
